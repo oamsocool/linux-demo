@@ -1,0 +1,10 @@
+#
+# Linux Demo (self-implement)
+#
+menu "DEMO Driver "
+comment " DEMO Driver"
+
+config HELLO_WORLD
+    tristate "HELLO WORLD"
+endmenu
+
