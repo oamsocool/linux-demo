@@ -1,0 +1,11 @@
+diff --git a/drivers/Kconfig b/drivers/Kconfig
+index 1d7af3c..7023a5f 100644
+--- a/drivers/Kconfig
++++ b/drivers/Kconfig
+@@ -209,4 +209,6 @@ source "drivers/tee/Kconfig"
+ 
+ source "drivers/mux/Kconfig"
+ 
++source "drivers/demo/Kconfig"
++
+ endmenu
