@@ -40,9 +40,8 @@ static ssize_t globalmem_read(struct file * filp, char __user * to, size_t size,
   unsigned int count = size;
   int ret = 0;
   struct globalmem_dev * devp = filp->private_data;
-  printk(KERN_INFO "f count: %u \n", count);
 
-  if (p > GLOBALMEM_SIZE){
+  if (p >= GLOBALMEM_SIZE){
     return 0;
   }
 
@@ -52,13 +51,11 @@ static ssize_t globalmem_read(struct file * filp, char __user * to, size_t size,
 
   if (copy_to_user(to, devp->mem + p, count)){
     ret = -EFAULT;
-  }else{
-    printk(KERN_INFO "count: %u \n", count);
-    *offset += count;
-    ret = count;
-
-    printk(KERN_INFO "read %u byte(s) from %lu\n", count, p);
   }
+  *offset += count;
+  ret = count;
+
+  printk(KERN_INFO "(dd) read %u byte(s) from %lu\n", count, p);
 
   return ret;
 }

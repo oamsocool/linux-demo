@@ -7,11 +7,11 @@ H :=@# hide command
 
 ifneq ($(KERNELRELEASE),)
 
-obj-m := globalmem.o
+obj-m := globalmem_2.o
 
 else
 
-name:= globalmem
+name:= globalmem_2
 KOBJ:= $(name).ko
 KDIR:= /labs/linux-lab/output/arm/linux-v4.6.7-vexpress-a9/
 PWD := $(shell pwd)
