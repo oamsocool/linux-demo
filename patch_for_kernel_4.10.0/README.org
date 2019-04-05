@@ -1,0 +1,6 @@
+* demo usage
+1. cp -ar $PWD/demo_for_with_src_compile $(kernel_dir)/drivers/demo
+2. patch 'demo_Kconfig.patch.diff' and 'demo_Makefile.patch.diff' to your kernel in kernel project root directory.
+3. compile with:(options)
+   - (option) make modules SUBDIRS=drivers/demo && make modules_install SUBDIRS=drivers/demo
+   - (option) make drivers/demo or make dirvers/demo/hello-world.ko
