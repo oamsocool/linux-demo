@@ -50,6 +50,9 @@ installed  := $(shell if [ -f $(to_install) ]; then echo $(to_install); else mkd
 all:
 	make -C $(KDIR) M=$(WORKSPACE) ARCH=$(ARCH) CROSS_COMPILE=$(CROSS_COMPILE) modules
 
+so:
+	make -C $(KDIR) M=$(PWD) ARCH=$(ARCH) CROSS_COMPILE=$(CROSS_COMPILE) modules
+
 install: $(WORKSPACE)/$(KOBJ)
 	cp $(WORKSPACE)/$(KOBJ) $(installed)/
 	cd $(PROJECT_ROOT) && $(MAKE) root-install && cd -

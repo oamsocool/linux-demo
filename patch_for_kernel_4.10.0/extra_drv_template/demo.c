@@ -5,14 +5,12 @@ static char * hello = "hello";
 module_param(hello, charp, S_IRUGO);
 
 static int __init hello_init(void){
-  printk(KERN_INFO "Hello world enter\n");
-  printk(KERN_INFO "> %s <\n", hello);
+  printk(KERN_INFO "Hello world enter.\n");
   return 0;
 }
 
 static void __exit hello_exit(void){
   printk(KERN_INFO "Hello world exit\n");
-  printk(KERN_INFO "fuck you\n");
 }
 
 module_init(hello_init);
