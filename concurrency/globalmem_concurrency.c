@@ -5,15 +5,15 @@
 #include <linux/slab.h>
 #include <linux/uaccess.h>
 
-#define MEM_MAX_SIZE
+#define MEM_MAX_SIZE 0x100
 #define GLOBALMEM_MAJOR 230
 #define GLOBALMEM_MAGIC 'g'
 #define DEV_NAME "globalmem"
 #define MEM_CLEAR _IO(GLOBALMEM_MAGIC, 0)
 
 
-static unsigned int major = GLOBALMEM_MAJOR;
-module_param(major, unsigned int, S_IRUGO);
+static int major = GLOBALMEM_MAJOR;
+module_param(major, int, S_IRUGO);
 
 struct globalmem_dev {
   struct cdev cdev;
@@ -63,7 +63,7 @@ static ssize_t globalmem_read (struct file * filp, char __user * to, size_t size
   ssize_t ret = 0;
   struct globalmem_dev * devp = filp->private_data;
   size_t count = size;
-  loff_t p = *ppos;
+  unsigned long p = *ppos;
 
   if (p < 0){
     return -EINVAL;
@@ -89,7 +89,7 @@ static ssize_t globalmem_write (struct file * filp, const char __user * from, si
   ssize_t ret = 0;
   struct globalmem_dev * devp = filp->private_data;
   size_t count = size;
-  loff_t p = *ppos;
+  unsigned long p = *ppos;
 
   if (p < 0){
     return -EINVAL;
@@ -147,6 +147,7 @@ static const struct file_operations g_fops = {
                                               .release = globalmem_release,
 };
 
+
 static int __init globalmem_init(void){
   int ret = 0;
   dev_t devno ;
@@ -156,7 +157,7 @@ static int __init globalmem_init(void){
     ret = register_chrdev_region(devno, 1, DEV_NAME);
   }else{
     ret = alloc_chrdev_region(&devno, 0, 1, DEV_NAME);
-    major = MAJOR(devno):
+    major = MAJOR(devno);
   }
 
   if (ret < 0){
@@ -178,7 +179,7 @@ static int __init globalmem_init(void){
     goto fail_add_cdev;
   }
 
-  prink(KERN_NOTICE "(INIT) globalmem device");
+  printk(KERN_NOTICE "(INIT) globalmem device");
   return 0;
 
  fail_add_cdev:
@@ -195,7 +196,7 @@ static void __exit globalmem_exit(void){
   cdev_del(&g_dev->cdev);
   kfree(g_dev);
   unregister_chrdev_region(MKDEV(major, 0), 1);
-  prink(KERN_NOTICE "(EXIT) Bye~");
+  printk(KERN_NOTICE "(EXIT) Bye~");
 }
 
 module_exit(globalmem_exit);

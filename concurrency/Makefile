@@ -43,6 +43,9 @@ export MODULE_NAME :=$(E)
 endif
 endif
 
+ROOT := $(PROJECT_ROOT)/system/root
+ROOT_INSTALLED := $(shell if [ -f $(ROOT) ]; then echo $(ROOT); else mkdir -p $(ROOT);echo $(ROOT); fi;)
+
 all:
 	make -C $(KDIR) M=$(PWD) ARCH=$(ARCH) CROSS_COMPILE=$(CROSS_COMPILE) modules
 
@@ -50,6 +53,10 @@ all:
 
 clean:
 	$(H)rm -rf *.ko *.o *.symvers *.cmd *.cmd.o *.mod.c *.order .tmp_versions/ .*.o.cmd .*.mod.o.cmd .*.ko.cmd
+
+install: $(PWD)/$(MODULE_NAME).ko
+	cp $(PWD)/$(MODULE_NAME).ko $(ROOT_INSTALLED)/
+	cd $(PROJECT_ROOT) && $(MAKE) root-install && cd -
 
 help:
 	$(H)echo
