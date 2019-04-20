@@ -11,14 +11,21 @@
 #define DEV_NAME "globalmem"
 #define MEM_CLEAR _IO(GLOBALMEM_MAGIC, 0)
 
+#define MEM_FULL MEM_MAX_SIZE
+#define MEM_EMPTY 0
+
 
 static int major = GLOBALMEM_MAJOR;
 module_param(major, int, S_IRUGO);
+
+static wait_queue_head_t r_wait_queue;
+static wait_queue_head_t w_wait_queue;
 
 struct globalmem_dev {
   struct cdev cdev;
   unsigned char mem[MEM_MAX_SIZE];
   struct mutex m_lock;
+  unsigned int current_len;
 };
 
 static struct globalmem_dev * g_dev;
@@ -77,14 +84,50 @@ static ssize_t globalmem_read (struct file * filp, char __user * to, size_t size
   }
 
   mutex_lock(&devp->m_lock);
-  if (copy_to_user(to, devp->mem+p, count)){
-    return -EFAULT;
+
+  DECLARE_WAITQUEUE(wait, current);
+  add_wait_queue(&devp->r_wait_queue, &wait);
+
+  while(current_len == 0){
+    if (filp->f_flags & O_NONBLOCK){
+      ret = -EAGAIN;
+      goto out;
+    }
+
+    set_current_state(TASK_INTERRUPTIBLE);
+    mutex_unlock(&devp->m_lock);
+
+    schedule();
+
+    if (signal_pending(current)){
+      ret = -ERESTARTSYS;
+      goto out2;
+    }
+    mutex_lock(&devp->m_lock);
   }
-  *ppos += count;
+
+  if (copy_to_user(to, devp->mem+p, count)){
+    ret = -EFAULT;
+    goto out;
+  }
+
+  memcpy(devp->mem, devp->mem + count, devp->current_len - count);
+  devp->current_len -= count;
   ret = count;
-  printk(KERN_NOTICE "(DD) read %u byte(s) from %lu\n",count, p);
+  printk(KERN_NOTICE "(DD) read %u byte(s), current_len: %u\n",count, devp->current_len);
+
+  wake_up_interruptible(&devp->w_wait_queue);
+
   mutex_unlock(&devp->m_lock);
 
+  return ret;
+
+ out:
+  mutex_unlock(&devp->m_lock);
+
+ out2:
+  remove_wait_queue(&devp->r_wait_queue, &wait);
+  __set_current_state(TASK_RUNNING);
   return ret;
 }
 
@@ -106,6 +149,30 @@ static ssize_t globalmem_write (struct file * filp, const char __user * from, si
   }
 
   mutex_lock(&devp->m_lock);
+
+  DECLARE_WAITQUEUE(wait, current);
+  add_wait_queue(&devp->w_wait_queue, &wait);
+
+  while(devp->current == MEM_FULL){
+    if (filp->f_flags & O_NONBLOCK){
+      ret = -EAGAIN;
+      goto out;
+    }
+
+    set_current_state(TASK_INTERRUPTIBLE);
+    mutex_unlock(&devp->m_lock);
+
+    schedule();
+
+    if (signal_pending(current)){
+      ret = -ERESTARTSYS;
+      goto out2;
+    }
+
+    mutex_lock(&devp->m_lock);
+  }
+
+
   if (copy_from_user(devp->mem + p, from, count)){
     return -EFAULT;
   }
@@ -113,6 +180,12 @@ static ssize_t globalmem_write (struct file * filp, const char __user * from, si
   ret = count;
   printk(KERN_NOTICE "(DD) write %u byte(s) from %lu\n",count, p);
   mutex_unlock(&devp->m_lock);
+
+ out:
+  mutex_unlock(&devp->m_lock);
+ out2:
+  remove_wait_queue(&devp->w_wait_queue, &wait);
+  __set_current_state(TASK_RUNNING);
   return ret;
 }
 
@@ -188,6 +261,9 @@ static int __init globalmem_init(void){
   }
 
   mutex_init(&g_dev->m_lock);
+  init_waitqueue_head(&r_wait_queue);
+  init_waitqueue_head(&w_wait_queue);
+  g_dev->current_len = 0;
 
   printk(KERN_NOTICE "(INIT) globalmem device\n");
   return 0;
@@ -212,4 +288,3 @@ static void __exit globalmem_exit(void){
 module_exit(globalmem_exit);
 
 MODULE_LICENSE("GPL v2");
-
