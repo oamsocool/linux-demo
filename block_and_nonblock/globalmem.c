@@ -4,6 +4,7 @@
 #include <linux/cdev.h>
 #include <linux/slab.h>
 #include <linux/uaccess.h>
+#include <linux/sched/signal.h>
 
 #define MEM_MAX_SIZE 0x100
 #define GLOBALMEM_MAJOR 230
@@ -71,24 +72,13 @@ static ssize_t globalmem_read (struct file * filp, char __user * to, size_t size
   ssize_t ret = 0;
   struct globalmem_dev * devp = filp->private_data;
   size_t count = size;
-  unsigned long p = *ppos;
-
-  if (p < 0){
-    return -EINVAL;
-  }
-  if (p >= MEM_MAX_SIZE){
-    return 0;
-  }
-  if (count > MEM_MAX_SIZE - p){
-    count = MEM_MAX_SIZE - p;
-  }
+  DECLARE_WAITQUEUE(wait, current);
 
   mutex_lock(&devp->m_lock);
+  add_wait_queue(&r_wait_queue, &wait);
 
-  DECLARE_WAITQUEUE(wait, current);
-  add_wait_queue(&devp->r_wait_queue, &wait);
+  while(devp->current_len == 0){
 
-  while(current_len == 0){
     if (filp->f_flags & O_NONBLOCK){
       ret = -EAGAIN;
       goto out;
@@ -106,7 +96,11 @@ static ssize_t globalmem_read (struct file * filp, char __user * to, size_t size
     mutex_lock(&devp->m_lock);
   }
 
-  if (copy_to_user(to, devp->mem+p, count)){
+  if (count > devp->current_len){
+    count = devp->current_len;
+  }
+
+  if (copy_to_user(to, devp->mem, count)){
     ret = -EFAULT;
     goto out;
   }
@@ -116,17 +110,13 @@ static ssize_t globalmem_read (struct file * filp, char __user * to, size_t size
   ret = count;
   printk(KERN_NOTICE "(DD) read %u byte(s), current_len: %u\n",count, devp->current_len);
 
-  wake_up_interruptible(&devp->w_wait_queue);
-
-  mutex_unlock(&devp->m_lock);
-
-  return ret;
+  wake_up_interruptible(&w_wait_queue);
 
  out:
   mutex_unlock(&devp->m_lock);
 
  out2:
-  remove_wait_queue(&devp->r_wait_queue, &wait);
+  remove_wait_queue(&r_wait_queue, &wait);
   __set_current_state(TASK_RUNNING);
   return ret;
 }
@@ -134,26 +124,14 @@ static ssize_t globalmem_read (struct file * filp, char __user * to, size_t size
 
 static ssize_t globalmem_write (struct file * filp, const char __user * from, size_t size, loff_t * ppos){
   ssize_t ret = 0;
-  struct globalmem_dev * devp = filp->private_data;
   size_t count = size;
-  unsigned long p = *ppos;
-
-  if (p < 0){
-    return -EINVAL;
-  }
-  if (p >= MEM_MAX_SIZE){
-    return 0;
-  }
-  if (count > MEM_MAX_SIZE - p){
-    count = MEM_MAX_SIZE - p;
-  }
+  struct globalmem_dev * devp = filp->private_data;
+  DECLARE_WAITQUEUE(wait, current);
 
   mutex_lock(&devp->m_lock);
+  add_wait_queue(&w_wait_queue, &wait);
 
-  DECLARE_WAITQUEUE(wait, current);
-  add_wait_queue(&devp->w_wait_queue, &wait);
-
-  while(devp->current == MEM_FULL){
+  while (devp->current_len == MEM_FULL){
     if (filp->f_flags & O_NONBLOCK){
       ret = -EAGAIN;
       goto out;
@@ -172,19 +150,25 @@ static ssize_t globalmem_write (struct file * filp, const char __user * from, si
     mutex_lock(&devp->m_lock);
   }
 
-
-  if (copy_from_user(devp->mem + p, from, count)){
-    return -EFAULT;
+  if (count > MEM_FULL - devp->current_len){
+    count = MEM_FULL - devp->current_len;
   }
-  *ppos += count;
+
+  if (copy_from_user(devp->mem + devp->current_len, from, count)){
+    ret = -EFAULT;
+    goto out;
+  }
+
+  devp->current_len += count;
+  printk(KERN_NOTICE "(DD) write %u byte(s), current_len: %u\n",count, devp->current_len);
+
+  wake_up_interruptible(&r_wait_queue);
   ret = count;
-  printk(KERN_NOTICE "(DD) write %u byte(s) from %lu\n",count, p);
-  mutex_unlock(&devp->m_lock);
 
  out:
   mutex_unlock(&devp->m_lock);
  out2:
-  remove_wait_queue(&devp->w_wait_queue, &wait);
+  remove_wait_queue(&w_wait_queue, &wait);
   __set_current_state(TASK_RUNNING);
   return ret;
 }
